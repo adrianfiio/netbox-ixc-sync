@@ -7,7 +7,7 @@
 
 Plugin para o **NetBox v4.6+** que integra com o **IXCSoft** e sincroniza automaticamente os clientes com **IP fixo** para o IPAM do NetBox.
 
-Ao clicar em **Sincronizar**, o plugin lê os logins do IXCSoft, filtra apenas os IPs que pertencem a um bloco definido por você (ex: `181.191.116.0/22`) e cria cada IP `/32` dentro de uma VRF, com a razão social do cliente na descrição.
+Ao clicar em **Sincronizar**, o plugin lê os logins do IXCSoft, filtra apenas os IPs que pertencem a um bloco definido por você (ex: `203.0.113.0/24`) e cria cada IP `/32` dentro de uma VRF, com a razão social do cliente na descrição.
 
 > 💡 O bloco e a VRF são **configuráveis por perfil**. Você pode criar quantas configurações quiser (uma por bloco/cliente) sem editar código.
 
@@ -43,8 +43,8 @@ Fluxo da sincronização:
 
 1. Lê os logins (`radusuarios`) **ativos** do IXCSoft que tenham **IP fixo** preenchido.
 2. Busca a **razão social** do cliente (`cliente.razao`).
-3. Filtra apenas os IPs que pertencem ao **bloco** configurado (ex: `181.191.116.0/22`).
-4. Cria/atualiza cada IP como **/32** no NetBox, dentro da **VRF** configurada (ex: `Nicfibra`).
+3. Filtra apenas os IPs que pertencem ao **bloco** configurado (ex: `203.0.113.0/24`).
+4. Cria/atualiza cada IP como **/32** no NetBox, dentro da **VRF** configurada (ex: `MinhaVRF`).
 5. Preenche a **descrição** do IP com `Razão Social (login)`.
 6. Registra um **log de auditoria** de cada execução.
 
@@ -134,7 +134,7 @@ Adicione:
 
 ```env
 IXC_HOST=https://SEU_DOMINIO/webservice/v1
-IXC_TOKEN=7:521683b205bb5bfc28f16e06efc717112b457ba6008b3f875fa7964177c0a191
+IXC_TOKEN=SEU_ID:SEU_HASH_DO_TOKEN
 IXC_VERIFY_SSL=false
 ```
 
@@ -176,8 +176,8 @@ sudo systemctl restart netbox netbox-rq
    | Campo | Exemplo |
    |-------|---------|
    | **Nome** | `Bloco Matriz` |
-   | **Bloco (Prefix)** | `181.191.116.0/22` |
-   | **VRF** | `Nicfibra` |
+   | **Bloco (Prefix)** | `203.0.113.0/24` |
+   | **VRF** | `MinhaVRF` |
 
 3. Salve e abra a configuração criada.
 4. Clique em **Sincronizar agora**. 🚀
@@ -186,10 +186,10 @@ sudo systemctl restart netbox netbox-rq
 Cada IP fixo do bloco será criado no NetBox assim:
 
 ```
-VRF: Nicfibra
-└─ Prefix: 181.191.116.0/22
-    ├─ 181.191.116.10/32 → "FULANO DA SILVA (login123)"
-    ├─ 181.191.116.25/32 → "EMPRESA XYZ LTDA (login456)"
+VRF: MinhaVRF
+└─ Prefix: 203.0.113.0/24
+    ├─ 203.0.113.10/32 → "FULANO DA SILVA (login123)"
+    ├─ 203.0.113.25/32 → "EMPRESA XYZ LTDA (login456)"
     └─ ...
 ```
 
@@ -201,11 +201,11 @@ O plugin permite **quantas configurações você quiser**. Para adicionar um nov
 
 Exemplo de várias configurações cadastradas:
 
-| Nome        | Bloco               | VRF       |
-|-------------|---------------------|-----------|
-| Bloco Matriz| `181.191.116.0/22`  | `Nicfibra`|
-| Cliente B   | `200.150.10.0/24`   | `ClienteB`|
-| Filial Sul  | `45.230.88.0/23`    | `SulNet`  |
+| Nome        | Bloco               | VRF          |
+|-------------|---------------------|--------------|
+| Bloco Matriz| `203.0.113.0/24`    | `MinhaVRF`   |
+| Cliente B   | `198.51.100.0/24`   | `VRF-ClienteB`|
+| Filial Sul  | `192.0.2.0/24`      | `VRF-Sul`    |
 
 Cada configuração tem seu **próprio botão Sincronizar** e gera seus próprios logs. Basta clicar em **Adicionar** e preencher o novo bloco e a nova VRF. 🎯
 
