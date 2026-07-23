@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netbox-ixc-sync"
+version = "0.1.0"
+description = "Plugin NetBox para sincronizar clientes e IPs fixos do IXCSoft"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Nicfibra" }]
+dependencies = ["requests"]
+
+[project.urls]
+Homepage = "https://github.com/SEU_USUARIO/netbox-ixc-sync"
