@@ -19,9 +19,9 @@ class Migration(migrations.Migration):
                 ('created', models.DateTimeField(auto_now_add=True, null=True)),
                 ('last_updated', models.DateTimeField(auto_now=True, null=True)),
                 ('custom_field_data', models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder)),
-                ('name', models.CharField(default='IXC Principal', max_length=100)),
+                ('name', models.CharField(max_length=100)),
                 ('prefix', models.CharField(max_length=50)),
-                ('vrf_name', models.CharField(default='Nicfibra', max_length=100)),
+                ('vrf_name', models.CharField(max_length=100)),
                 ('tags', taggit.managers.TaggableManager(through='extras.TaggedItem', to='extras.Tag')),
             ],
             options={
