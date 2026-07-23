@@ -1,0 +1,52 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+  <div class="col col-md-6">
+    <div class="card">
+      <h5 class="card-header">Configuração IXCSoft</h5>
+      <table class="table table-hover attr-table">
+        <tr><th>Nome</th><td>{{ object.name }}</td></tr>
+        <tr><th>Host</th><td>{{ object.host }}</td></tr>
+        <tr><th>Bloco (Prefix)</th><td>{{ object.prefix }}</td></tr>
+        <tr><th>VRF</th><td>{{ object.vrf_name }}</td></tr>
+        <tr><th>Verificar SSL</th><td>{{ object.verify_ssl }}</td></tr>
+      </table>
+      <div class="card-footer text-end">
+        <a href="{% url 'plugins:netbox_ixc_sync:ixcconfig_sync' pk=object.pk %}"
+           class="btn btn-primary">
+          <i class="mdi mdi-sync"></i> Sincronizar agora
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col col-md-6">
+    <div class="card">
+      <h5 class="card-header">Últimas sincronizações</h5>
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>Data/Hora</th><th>OK</th>
+            <th>Criados</th><th>Atualizados</th><th>Ignorados</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td><a href="{{ log.get_absolute_url }}">{{ log.timestamp|date:"d/m/Y H:i:s" }}</a></td>
+            <td>{% if log.success %}✅{% else %}❌{% endif %}</td>
+            <td>{{ log.criados }}</td>
+            <td>{{ log.atualizados }}</td>
+            <td>{{ log.ignorados }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5">Nenhuma sincronização ainda.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
