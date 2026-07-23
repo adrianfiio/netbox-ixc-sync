@@ -8,17 +8,19 @@ class IXCConfig(NetBoxModel):
     Perfil de sincronização.
     NÃO guarda token/host — esses vêm das variáveis de ambiente
     (via PLUGINS_CONFIG no configuration.py), por segurança.
-    Aqui só ficam os dados que mudam com frequência.
+    Aqui só ficam os dados que mudam a cada bloco/cliente.
     """
-    name = models.CharField(max_length=100, default='IXC Principal')
+    name = models.CharField(
+        max_length=100,
+        help_text='Nome de identificação. Ex: Bloco Matriz, Cliente A...'
+    )
     prefix = models.CharField(
         max_length=50,
-        help_text='Bloco a sincronizar. Ex: 181.191.116.0/22'
+        help_text='Bloco a sincronizar. Exemplo: 181.191.116.0/22'
     )
     vrf_name = models.CharField(
         max_length=100,
-        default='Nicfibra',
-        help_text='Nome da VRF onde os IPs serão criados. Ex: Nicfibra'
+        help_text='Nome da VRF onde os IPs serão criados. Exemplo: Nicfibra'
     )
 
     class Meta:
