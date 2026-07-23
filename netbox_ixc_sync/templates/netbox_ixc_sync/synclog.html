@@ -1,0 +1,24 @@
+{% extends 'generic/object.html' %}
+
+{% block content %}
+<div class="card">
+  <h5 class="card-header">Log de Sincronização</h5>
+  <table class="table table-hover attr-table">
+    <tr><th>Configuração</th><td>{{ object.config }}</td></tr>
+    <tr><th>Data/Hora</th><td>{{ object.timestamp|date:"d/m/Y H:i:s" }}</td></tr>
+    <tr><th>Sucesso</th><td>{% if object.success %}✅ Sim{% else %}❌ Não{% endif %}</td></tr>
+    <tr><th>Criados</th><td>{{ object.criados }}</td></tr>
+    <tr><th>Atualizados</th><td>{{ object.atualizados }}</td></tr>
+    <tr><th>Ignorados</th><td>{{ object.ignorados }}</td></tr>
+    <tr><th>Total lido do IXC</th><td>{{ object.total_ixc }}</td></tr>
+    <tr><th>Mensagem</th><td>{{ object.mensagem }}</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h5 class="card-header">Detalhes</h5>
+  <div class="card-body">
+    <pre style="white-space: pre-wrap;">{{ object.detalhes }}</pre>
+  </div>
+</div>
+{% endblock %}
