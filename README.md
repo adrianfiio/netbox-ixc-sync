@@ -3,11 +3,11 @@
 [![NetBox](https://img.shields.io/badge/NetBox-4.6%2B-blue.svg)](https://github.com/netbox-community/netbox)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.1-orange.svg)](https://github.com/adrianfiio/netbox-ixc-sync/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-orange.svg)](https://github.com/adrianfiio/netbox-ixc-sync/releases)
 
 Plugin para o **NetBox v4.6+** que integra com o **IXCSoft** e sincroniza automaticamente os clientes com **IP fixo** para o IPAM do NetBox.
 
-Ao clicar em **Sincronizar**, o plugin lê os logins do IXCSoft, filtra apenas os IPs que pertencem a um bloco definido por você (ex: `203.0.113.0/24`) e cria cada IP `/32` dentro de uma VRF, com a razão social do cliente na descrição.
+Ao clicar em **Sincronizar**, o plugin lê os logins do IXCSoft, filtra apenas os IPs que pertencem a um bloco definido por você (ex: `203.0.113.0/24`) e cria cada IP `/32` dentro de uma VRF, com a razão social do cliente na descrição. Opcionalmente, também remove os IPs de clientes que não existem mais no IXC.
 
 > 💡 O bloco e a VRF são **configuráveis por perfil**. Você pode criar quantas configurações quiser (uma por bloco/cliente) sem editar código.
 
@@ -19,8 +19,9 @@ Ao clicar em **Sincronizar**, o plugin lê os logins do IXCSoft, filtra apenas o
 - [Funcionalidades](#-funcionalidades)
 - [Requisitos](#-requisitos)
 - [Instalação](#-instalação)
-- [Configuração das credenciais](#-configuração-das-credenciais-variáveis-de-ambiente)
+- [Configuração das credenciais](#-configuração-das-credenciais)
 - [Uso](#-uso)
+- [Remoção de IPs órfãos](#-remoção-de-ips-órfãos-clientes-cancelados)
 - [Usando com vários blocos / clientes](#-usando-com-vários-blocos--clientes)
 - [Estrutura do projeto](#-estrutura-do-projeto)
 - [Solução de problemas](#-solução-de-problemas)
@@ -34,8 +35,8 @@ Ao clicar em **Sincronizar**, o plugin lê os logins do IXCSoft, filtra apenas o
 ```
 ┌─────────────┐     API REST      ┌───────────────┐      ORM       ┌──────────┐
 │   IXCSoft   │ ────────────────► │ netbox-ixc-sync│ ────────────► │  NetBox  │
-│ radusuarios │  clientes com     │   (plugin)     │  cria IPs /32  │  IPAM +  │
-│  + cliente  │  IP fixo          │                │  na VRF        │   VRF    │
+│ radusuarios │  clientes com     │   (plugin)     │  cria/remove   │  IPAM +  │
+│  + cliente  │  IP fixo          │                │  IPs /32       │   VRF    │
 └─────────────┘                   └───────────────┘                └──────────┘
 ```
 
@@ -46,7 +47,8 @@ Fluxo da sincronização:
 3. Filtra apenas os IPs que pertencem ao **bloco** configurado (ex: `203.0.113.0/24`).
 4. Cria/atualiza cada IP como **/32** no NetBox, dentro da **VRF** configurada (ex: `MinhaVRF`).
 5. Preenche a **descrição** do IP com `Razão Social (login)`.
-6. Registra um **log de auditoria** de cada execução.
+6. *(Opcional)* Remove do NetBox os IPs do bloco que não existem mais no IXC.
+7. Registra um **log de auditoria** de cada execução.
 
 ---
 
@@ -56,10 +58,11 @@ Fluxo da sincronização:
 - 🔎 Filtro por bloco/prefixo (só sincroniza o que você quer).
 - 🌐 Criação de IPs `/32` dentro de uma VRF configurável.
 - 🏷️ Descrição do IP com a razão social do cliente + login.
+- 🗑️ Remoção opcional e segura de IPs órfãos (clientes cancelados).
 - 🧩 Suporte a **múltiplos blocos/clientes** (uma configuração por perfil).
 - 🖱️ Botão **Sincronizar** direto na interface do NetBox.
 - 📜 Log de auditoria completo de todas as sincronizações.
-- 🔐 Credenciais (token/URL) protegidas via variáveis de ambiente — nunca no banco ou no Git.
+- 🔐 Credenciais (token/URL) protegidas — nunca no banco ou no Git.
 
 ---
 
@@ -80,27 +83,17 @@ Fluxo da sincronização:
 ### 1. Clonar e instalar o plugin
 
 ```bash
-# Ative o virtualenv do NetBox
 source /opt/netbox/venv/bin/activate
-
-# Clone o repositório
 cd /opt
 git clone https://github.com/adrianfiio/netbox-ixc-sync.git
 cd netbox-ixc-sync
-
-# Instale em modo editável
 pip install -e .
 ```
 
-### 2. Ativar o plugin
+### 2. Ativar o plugin e configurar as credenciais
 
-Edite `/opt/netbox/netbox/netbox/configuration.py`:
-
-```python
-PLUGINS = ['netbox_ixc_sync']
-```
-
-*(a configuração completa com credenciais está na próxima seção)*
+Edite `/opt/netbox/netbox/netbox/configuration.py` (veja a seção
+[Configuração das credenciais](#-configuração-das-credenciais)).
 
 ### 3. Aplicar migrations e reiniciar
 
@@ -112,59 +105,43 @@ sudo systemctl restart netbox netbox-rq
 
 ### 4. (Recomendado) Tornar a instalação persistente
 
-Para o plugin sobreviver a upgrades do NetBox, adicione-o ao arquivo de requisitos locais:
-
 ```bash
 echo "-e /opt/netbox-ixc-sync" >> /opt/netbox/local_requirements.txt
 ```
 
 ---
 
-## 🔐 Configuração das credenciais (variáveis de ambiente)
+## 🔐 Configuração das credenciais
 
-Por segurança, o **token e a URL do IXCSoft NÃO ficam no banco de dados**. Eles são lidos de variáveis de ambiente.
-
-### 1. Definir as variáveis de ambiente
-
-```bash
-sudo nano /etc/netbox/netbox.env
-```
-
-Adicione:
-
-```env
-IXC_HOST=https://SEU_DOMINIO/webservice/v1
-IXC_TOKEN=SEU_ID:SEU_HASH_DO_TOKEN
-IXC_VERIFY_SSL=false
-```
-
-> `IXC_VERIFY_SSL=false` é o correto para certificados auto-assinados (padrão do IXC).
-
-### 2. Ligar as variáveis ao plugin
+Por segurança, o **token e a URL do IXCSoft NÃO ficam no banco de dados** —
+eles são definidos no `configuration.py`, que fica apenas no seu servidor
+(nunca vai para o Git).
 
 Edite `/opt/netbox/netbox/netbox/configuration.py`:
 
 ```python
-import os
-
 PLUGINS = ['netbox_ixc_sync']
 
 PLUGINS_CONFIG = {
     'netbox_ixc_sync': {
-        'ixc_host': os.environ.get('IXC_HOST', ''),
-        'ixc_token': os.environ.get('IXC_TOKEN', ''),
-        'verify_ssl': os.environ.get('IXC_VERIFY_SSL', 'false').lower() == 'true',
+        'ixc_host': 'https://SEU_DOMINIO/webservice/v1',
+        'ixc_token': 'SEU_ID:SEU_HASH_DO_TOKEN',
+        'verify_ssl': False,
     }
 }
 ```
 
-### 3. Reiniciar
+> Se você já tem outros plugins, adicione `'netbox_ixc_sync'` à lista `PLUGINS`
+> existente e inclua a chave `'netbox_ixc_sync'` dentro do `PLUGINS_CONFIG`
+> já existente — não crie blocos duplicados.
+
+`verify_ssl: False` é o correto para certificados auto-assinados (padrão do IXC).
+
+Reinicie após alterar:
 
 ```bash
 sudo systemctl restart netbox netbox-rq
 ```
-
-> ✅ Com isso o token nunca aparece no banco, no código ou no Git. Na tela do plugin você configura apenas o **Bloco** e a **VRF**.
 
 ---
 
@@ -178,12 +155,12 @@ sudo systemctl restart netbox netbox-rq
    | **Nome** | `Bloco Matriz` |
    | **Bloco (Prefix)** | `203.0.113.0/24` |
    | **VRF** | `MinhaVRF` |
+   | **Remover IPs órfãos** | desmarcado (ver seção abaixo) |
 
-3. Salve e abra a configuração criada.
-4. Clique em **Sincronizar agora**. 🚀
-5. Veja o resultado em **IXCSoft Sync → Logs de Sincronização**.
+3. Salve, abra a configuração e clique em **Sincronizar agora**. 🚀
+4. Veja o resultado em **IXCSoft Sync → Logs de Sincronização**.
 
-Cada IP fixo do bloco será criado no NetBox assim:
+Resultado no NetBox:
 
 ```
 VRF: MinhaVRF
@@ -195,19 +172,35 @@ VRF: MinhaVRF
 
 ---
 
+## 🗑️ Remoção de IPs órfãos (clientes cancelados)
+
+Se você marcar **"Remover IPs órfãos"** na configuração, a cada sincronização
+o plugin também **remove do NetBox** os IPs que não existem mais no IXC —
+por exemplo, clientes cancelados que perderam o IP fixo.
+
+A remoção é **segura**:
+
+- ✅ Só afeta IPs **dentro do bloco e da VRF daquela configuração** — nunca mexe em nada de fora.
+- ✅ Só executa se a leitura do IXC retornou dados (evita apagar tudo se a API falhar).
+- ✅ Cada remoção fica registrada no **log**, com o IP e a descrição.
+
+> ⚠️ Recomenda-se testar primeiro com a opção **desmarcada** e conferir os logs
+> antes de ativar a remoção automática.
+
+---
+
 ## 🧩 Usando com vários blocos / clientes
 
-O plugin permite **quantas configurações você quiser**. Para adicionar um novo bloco ou cliente, **não é preciso editar código** — basta criar uma nova configuração na tela.
+Para adicionar um novo bloco ou cliente, **não é preciso editar código** —
+basta criar uma nova configuração na tela.
 
-Exemplo de várias configurações cadastradas:
+| Nome         | Bloco               | VRF            |
+|--------------|---------------------|----------------|
+| Bloco Matriz | `203.0.113.0/24`    | `MinhaVRF`     |
+| Cliente B    | `198.51.100.0/24`   | `VRF-ClienteB` |
+| Filial Sul   | `192.0.2.0/24`      | `VRF-Sul`      |
 
-| Nome        | Bloco               | VRF          |
-|-------------|---------------------|--------------|
-| Bloco Matriz| `203.0.113.0/24`    | `MinhaVRF`   |
-| Cliente B   | `198.51.100.0/24`   | `VRF-ClienteB`|
-| Filial Sul  | `192.0.2.0/24`      | `VRF-Sul`    |
-
-Cada configuração tem seu **próprio botão Sincronizar** e gera seus próprios logs. Basta clicar em **Adicionar** e preencher o novo bloco e a nova VRF. 🎯
+Cada configuração tem seu **próprio botão Sincronizar** e gera seus próprios logs.
 
 ---
 
@@ -221,18 +214,19 @@ netbox-ixc-sync/
 ├── setup.py
 ├── pyproject.toml
 └── netbox_ixc_sync/
-    ├── __init__.py         # config do plugin
-    ├── ixc_api.py          # cliente da API IXCSoft
-    ├── models.py           # IXCConfig + SyncLog
-    ├── sync.py             # lógica de sincronização
+    ├── __init__.py
+    ├── ixc_api.py
+    ├── models.py
+    ├── sync.py
     ├── forms.py
     ├── tables.py
-    ├── views.py            # views + ação Sincronizar
+    ├── views.py
     ├── urls.py
-    ├── navigation.py       # menu lateral
+    ├── navigation.py
     ├── migrations/
     │   ├── __init__.py
-    │   └── 0001_initial.py
+    │   ├── 0001_initial.py
+    │   └── 0002_orphans.py
     └── templates/
         └── netbox_ixc_sync/
             ├── ixcconfig.html
@@ -245,13 +239,13 @@ netbox-ixc-sync/
 
 | Problema | Causa provável | Solução |
 |----------|----------------|---------|
-| **Erro 401 (Unauthorized)** | Formato do token/autenticação diferente | Verifique o token e o formato do header em `ixc_api.py` |
-| **"Credenciais não configuradas"** | Variáveis de ambiente não definidas | Confira `IXC_HOST` e `IXC_TOKEN` e reinicie o NetBox |
+| **Erro 401 (Unauthorized)** | Formato do token/autenticação diferente | Verifique o token e o header em `ixc_api.py` |
+| **"Credenciais não configuradas"** | `PLUGINS_CONFIG` sem host/token | Confira o `configuration.py` e reinicie o NetBox |
 | **Nenhum IP criado** | Campo do IP diferente no seu IXC | Confirme se o campo é `radusuarios.ip`; ajuste em `sync.py` |
-| **Nome do cliente errado** | Campo diferente no seu IXC | O plugin usa `cliente.razao`; ajuste em `sync.py` se necessário |
-| **SSL / certificado inválido** | Certificado auto-assinado | Deixe `IXC_VERIFY_SSL=false` |
+| **Nome do cliente errado** | Campo diferente no seu IXC | O plugin usa `cliente.razao`; ajuste em `sync.py` |
+| **SSL / certificado inválido** | Certificado auto-assinado | Deixe `verify_ssl: False` |
 
-Para ver logs detalhados de erro:
+Ver logs em tempo real:
 
 ```bash
 sudo journalctl -u netbox -f
@@ -263,26 +257,24 @@ sudo journalctl -u netbox -f
 
 - [x] Sincronização manual por botão
 - [x] Log de auditoria
-- [x] Credenciais via variáveis de ambiente
+- [x] Credenciais protegidas via configuration.py
 - [x] Suporte a múltiplos blocos/clientes
+- [x] Remoção de IPs órfãos (clientes cancelados)
 - [ ] Sincronização automática agendada (cron / RQ scheduler)
 - [ ] Suporte a IPv6
 - [ ] Vínculo opcional do cliente como Tenant
-- [ ] Filtro por múltiplos blocos em uma única configuração
 
 ---
 
 ## 📄 Licença
 
-Distribuído sob a licença **MIT**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+Distribuído sob a licença **MIT**. Veja o arquivo [LICENSE](LICENSE).
 
 MIT © [adrianfiio](https://github.com/adrianfiio)
 
 ---
 
 ## 🤝 Contribuindo
-
-Contribuições são bem-vindas! Abra uma *issue* ou envie um *pull request*.
 
 1. Faça um fork do projeto
 2. Crie sua branch (`git checkout -b feature/nova-funcionalidade`)
