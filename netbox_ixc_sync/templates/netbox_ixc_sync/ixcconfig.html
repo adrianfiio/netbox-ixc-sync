@@ -8,10 +8,9 @@
       <h5 class="card-header">Configuração IXCSoft</h5>
       <table class="table table-hover attr-table">
         <tr><th>Nome</th><td>{{ object.name }}</td></tr>
-        <tr><th>Host</th><td>{{ object.host }}</td></tr>
         <tr><th>Bloco (Prefix)</th><td>{{ object.prefix }}</td></tr>
         <tr><th>VRF</th><td>{{ object.vrf_name }}</td></tr>
-        <tr><th>Verificar SSL</th><td>{{ object.verify_ssl }}</td></tr>
+        <tr><th>Remover IPs órfãos</th><td>{{ object.remove_orphans }}</td></tr>
       </table>
       <div class="card-footer text-end">
         <a href="{% url 'plugins:netbox_ixc_sync:ixcconfig_sync' pk=object.pk %}"
@@ -29,7 +28,7 @@
         <thead>
           <tr>
             <th>Data/Hora</th><th>OK</th>
-            <th>Criados</th><th>Atualizados</th><th>Ignorados</th>
+            <th>Criados</th><th>Atualiz.</th><th>Ignor.</th><th>Remov.</th>
           </tr>
         </thead>
         <tbody>
@@ -40,9 +39,10 @@
             <td>{{ log.criados }}</td>
             <td>{{ log.atualizados }}</td>
             <td>{{ log.ignorados }}</td>
+            <td>{{ log.removidos }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="5">Nenhuma sincronização ainda.</td></tr>
+          <tr><td colspan="6">Nenhuma sincronização ainda.</td></tr>
           {% endfor %}
         </tbody>
       </table>
