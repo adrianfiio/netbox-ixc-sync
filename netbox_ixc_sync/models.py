@@ -16,11 +16,18 @@ class IXCConfig(NetBoxModel):
     )
     prefix = models.CharField(
         max_length=50,
-        help_text='Bloco a sincronizar. Exemplo: 181.191.116.0/22'
+        help_text='Bloco a sincronizar. Exemplo: 203.0.113.0/24'
     )
     vrf_name = models.CharField(
         max_length=100,
-        help_text='Nome da VRF onde os IPs serão criados. Exemplo: Nicfibra'
+        help_text='Nome da VRF onde os IPs serão criados. Exemplo: MinhaVRF'
+    )
+    remove_orphans = models.BooleanField(
+        default=False,
+        verbose_name='Remover IPs órfãos',
+        help_text='Se marcado, remove do NetBox os IPs deste bloco/VRF que '
+                  'não existem mais no IXC (ex: clientes cancelados). '
+                  'Use com cuidado.'
     )
 
     class Meta:
@@ -47,6 +54,7 @@ class SyncLog(NetBoxModel):
     criados = models.IntegerField(default=0)
     atualizados = models.IntegerField(default=0)
     ignorados = models.IntegerField(default=0)
+    removidos = models.IntegerField(default=0)
     total_ixc = models.IntegerField(default=0)
     mensagem = models.TextField(blank=True)
     detalhes = models.TextField(blank=True)
