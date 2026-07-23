@@ -56,9 +56,11 @@ class IXCSyncView(View):
 
 
 # ----------------- SyncLog -----------------
+# ----------------- SyncLog -----------------
 class SyncLogListView(generic.ObjectListView):
     queryset = SyncLog.objects.all()
     table = tables.SyncLogTable
+    actions = {}  # sem botões de add/edit/import (log é somente leitura)
 
 
 class SyncLogView(generic.ObjectView):
