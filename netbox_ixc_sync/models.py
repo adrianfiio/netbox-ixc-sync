@@ -4,20 +4,13 @@ from netbox.models import NetBoxModel
 
 
 class IXCConfig(NetBoxModel):
-    """Configuração de conexão com o IXCSoft."""
+    """
+    Perfil de sincronização.
+    NÃO guarda token/host — esses vêm das variáveis de ambiente
+    (via PLUGINS_CONFIG no configuration.py), por segurança.
+    Aqui só ficam os dados que mudam com frequência.
+    """
     name = models.CharField(max_length=100, default='IXC Principal')
-    host = models.CharField(
-        max_length=255,
-        help_text='Ex: https://SEU_DOMINIO/webservice/v1'
-    )
-    token = models.CharField(
-        max_length=255,
-        help_text='Token gerado no cadastro do usuário (id:hash)'
-    )
-    verify_ssl = models.BooleanField(
-        default=False,
-        help_text='Marque apenas se o certificado for válido (não auto-assinado)'
-    )
     prefix = models.CharField(
         max_length=50,
         help_text='Bloco a sincronizar. Ex: 181.191.116.0/22'
