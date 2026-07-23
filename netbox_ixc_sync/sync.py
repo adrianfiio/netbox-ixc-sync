@@ -1,12 +1,25 @@
 import ipaddress
 import logging
 
+from django.conf import settings
 from ipam.models import IPAddress, Prefix, VRF
 
 from .ixc_api import IXCWebserviceClient
 from .models import SyncLog
 
 logger = logging.getLogger('netbox.plugins.ixc_sync')
+
+
+def _get_credenciais():
+    """
+    Lê host/token/ssl do PLUGINS_CONFIG (configuration.py),
+    que por sua vez lê das variáveis de ambiente.
+    """
+    cfg = settings.PLUGINS_CONFIG.get('netbox_ixc_sync', {})
+    host = cfg.get('ixc_host', '')
+    token = cfg.get('ixc_token', '')
+    verify_ssl = cfg.get('verify_ssl', False)
+    return host, token, verify_ssl
 
 
 def buscar_logins_com_ip(client, page_size=100):
@@ -30,7 +43,7 @@ def buscar_logins_com_ip(client, page_size=100):
 
         for reg in registros:
             ip = (reg.get('ip') or '').strip()
-            if ip:  # só quem tem IP fixo
+            if ip:
                 logins.append({
                     'id_cliente': reg.get('id_cliente'),
                     'login': reg.get('login'),
@@ -68,21 +81,24 @@ def buscar_nome_cliente(client, id_cliente, cache):
 
 def sincronizar(cfg):
     """
-    1. Lê logins com IP fixo do IXC
-    2. Filtra só os IPs do bloco (cfg.prefix)
-    3. Cria/atualiza o IP /32 no NetBox, dentro da VRF (cfg.vrf_name),
-       com descrição = razão do cliente
-    4. Grava um SyncLog com o resultado
+    Executa a sincronização usando as credenciais do ambiente
+    e o bloco/VRF do perfil (cfg). Grava um SyncLog no final.
     """
     detalhes = []
     try:
-        client = IXCWebserviceClient(cfg.host, cfg.token, cfg.verify_ssl)
+        host, token, verify_ssl = _get_credenciais()
+
+        # Valida se as credenciais foram configuradas no servidor
+        if not host or not token:
+            raise ValueError(
+                'Credenciais do IXC não configuradas. Defina IXC_HOST e '
+                'IXC_TOKEN nas variáveis de ambiente (ver README).'
+            )
+
+        client = IXCWebserviceClient(host, token, verify_ssl)
         rede = ipaddress.ip_network(cfg.prefix, strict=False)
 
-        # Garante a VRF (ex: Nicfibra)
         vrf_obj, _ = VRF.objects.get_or_create(name=cfg.vrf_name)
-
-        # Garante o Prefix dentro da VRF
         Prefix.objects.get_or_create(prefix=cfg.prefix, vrf=vrf_obj)
 
         logins = buscar_logins_com_ip(client)
@@ -145,7 +161,6 @@ def sincronizar(cfg):
             'detalhes': detalhes,
         }
 
-    # Grava o log de auditoria
     SyncLog.objects.create(
         config=cfg,
         success=resultado['success'],
