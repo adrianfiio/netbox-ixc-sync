@@ -11,15 +11,13 @@ logger = logging.getLogger('netbox.plugins.ixc_sync')
 
 
 def _get_credenciais():
-    """
-    Lê host/token/ssl do PLUGINS_CONFIG (configuration.py),
-    que por sua vez lê das variáveis de ambiente.
-    """
+    """Lê host/token/ssl do PLUGINS_CONFIG (configuration.py)."""
     cfg = settings.PLUGINS_CONFIG.get('netbox_ixc_sync', {})
-    host = cfg.get('ixc_host', '')
-    token = cfg.get('ixc_token', '')
-    verify_ssl = cfg.get('verify_ssl', False)
-    return host, token, verify_ssl
+    return (
+        cfg.get('ixc_host', ''),
+        cfg.get('ixc_token', ''),
+        cfg.get('verify_ssl', False),
+    )
 
 
 def buscar_logins_com_ip(client, page_size=100):
@@ -83,16 +81,18 @@ def sincronizar(cfg):
     """
     Executa a sincronização usando as credenciais do ambiente
     e o bloco/VRF do perfil (cfg). Grava um SyncLog no final.
+
+    Se cfg.remove_orphans estiver ativo, remove com segurança os IPs
+    deste bloco/VRF que não existem mais no IXC.
     """
     detalhes = []
     try:
         host, token, verify_ssl = _get_credenciais()
 
-        # Valida se as credenciais foram configuradas no servidor
         if not host or not token:
             raise ValueError(
-                'Credenciais do IXC não configuradas. Defina IXC_HOST e '
-                'IXC_TOKEN nas variáveis de ambiente (ver README).'
+                'Credenciais do IXC não configuradas. Defina ixc_host e '
+                'ixc_token no PLUGINS_CONFIG (ver README).'
             )
 
         client = IXCWebserviceClient(host, token, verify_ssl)
@@ -104,7 +104,10 @@ def sincronizar(cfg):
         logins = buscar_logins_com_ip(client)
         cache_nomes = {}
 
-        criados, atualizados, ignorados = 0, 0, 0
+        criados, atualizados, ignorados, removidos = 0, 0, 0, 0
+
+        # Guarda os IPs que existem no IXC e pertencem ao bloco
+        ips_no_ixc = set()
 
         for item in logins:
             ip_str = item['ip']
@@ -121,6 +124,7 @@ def sincronizar(cfg):
             nome = buscar_nome_cliente(client, item['id_cliente'], cache_nomes)
             descricao = f"{nome} ({item['login']})"
             ip_cidr = f'{ip_str}/32'
+            ips_no_ixc.add(ip_cidr)
 
             obj = IPAddress.objects.filter(address=ip_cidr, vrf=vrf_obj).first()
             if obj:
@@ -139,11 +143,30 @@ def sincronizar(cfg):
                 criados += 1
                 detalhes.append(f'Criado: {ip_cidr} [{cfg.vrf_name}] -> {nome}')
 
+        # ---- Remoção segura de IPs órfãos ----
+        # Só executa se: opção ativada E a leitura do IXC trouxe dados
+        # (evita apagar tudo caso a API retorne vazio por falha).
+        if cfg.remove_orphans and len(logins) > 0:
+            # Todos os IPs /32 que estão no NetBox dentro desta VRF...
+            ips_no_netbox = IPAddress.objects.filter(
+                vrf=vrf_obj,
+                address__net_contained_or_equal=cfg.prefix,
+            )
+            for ip_obj in ips_no_netbox:
+                if str(ip_obj.address) not in ips_no_ixc:
+                    detalhes.append(
+                        f'Removido (órfão): {ip_obj.address} '
+                        f'[{cfg.vrf_name}] -> {ip_obj.description}'
+                    )
+                    ip_obj.delete()
+                    removidos += 1
+
         resultado = {
             'success': True,
             'criados': criados,
             'atualizados': atualizados,
             'ignorados': ignorados,
+            'removidos': removidos,
             'total_ixc': len(logins),
             'mensagem': 'Sincronização concluída com sucesso.',
             'detalhes': detalhes,
@@ -156,6 +179,7 @@ def sincronizar(cfg):
             'criados': 0,
             'atualizados': 0,
             'ignorados': 0,
+            'removidos': 0,
             'total_ixc': 0,
             'mensagem': f'Erro: {e}',
             'detalhes': detalhes,
@@ -167,6 +191,7 @@ def sincronizar(cfg):
         criados=resultado['criados'],
         atualizados=resultado['atualizados'],
         ignorados=resultado['ignorados'],
+        removidos=resultado['removidos'],
         total_ixc=resultado['total_ixc'],
         mensagem=resultado['mensagem'],
         detalhes='\n'.join(resultado['detalhes']),
